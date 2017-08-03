@@ -1108,7 +1108,7 @@ int spawn_and_wait(char **argv) FAST_FUNC;
 int run_nofork_applet(int applet_no, char **argv) FAST_FUNC;
 #ifndef BUILD_INDIVIDUAL
 extern int find_applet_by_name(const char *name) FAST_FUNC;
-extern void run_applet_no_and_exit(int a, const char *name, char **argv) NORETURN FAST_FUNC;
+extern int run_applet_no_and_exit(int a, const char *name, char **argv) /*NORETURN*/ FAST_FUNC;
 #endif
 
 /* Helpers for daemonization.
@@ -1243,8 +1243,8 @@ extern smallint syslog_level;
 extern smallint logmode;
 extern uint8_t xfunc_error_retval;
 extern void (*die_func)(void);
-extern void xfunc_die(void) NORETURN FAST_FUNC;
-extern void bb_show_usage(void) NORETURN FAST_FUNC;
+extern int xfunc_die(void) /*NORETURN*/ FAST_FUNC;
+extern int bb_show_usage(void) /*NORETURN*/ FAST_FUNC;
 extern void bb_error_msg(const char *s, ...) __attribute__ ((format (printf, 1, 2))) FAST_FUNC;
 extern void bb_error_msg_and_die(const char *s, ...) __attribute__ ((noreturn, format (printf, 1, 2))) FAST_FUNC;
 extern void bb_perror_msg(const char *s, ...) __attribute__ ((format (printf, 1, 2))) FAST_FUNC;

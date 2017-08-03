@@ -14,9 +14,9 @@
 
 void (*die_func)(void);
 
-void FAST_FUNC xfunc_die(void)
+int FAST_FUNC xfunc_die(void)
 {
 	if (die_func)
 		die_func();
-	exit(xfunc_error_retval);
+	return xfunc_error_retval;
 }
