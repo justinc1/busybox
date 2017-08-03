@@ -130,7 +130,7 @@ static const char *unpack_usage_messages(void)
 #endif /* FEATURE_COMPRESS_USAGE */
 
 
-void FAST_FUNC bb_show_usage(void)
+int FAST_FUNC bb_show_usage(void)
 {
 	if (ENABLE_SHOW_USAGE) {
 #ifdef SINGLE_APPLET_STR
@@ -152,7 +152,7 @@ void FAST_FUNC bb_show_usage(void)
 		int ap = find_applet_by_name(applet_name);
 
 		if (ap < 0) /* never happens, paranoia */
-			xfunc_die();
+			return xfunc_die();
 		while (ap) {
 			while (*p++) continue;
 			ap--;
@@ -172,7 +172,7 @@ void FAST_FUNC bb_show_usage(void)
 			dealloc_usage_messages((char*)usage_string);
 #endif
 	}
-	xfunc_die();
+	return xfunc_die();
 }
 
 int FAST_FUNC find_applet_by_name(const char *name)
@@ -329,7 +329,7 @@ void lbb_prepare(const char *applet
 		/* Special case. POSIX says "test --help"
 		 * should be no different from e.g. "test --foo".  */
 		if (!ENABLE_TEST || strcmp(applet_name, "test") != 0)
-			bb_show_usage();
+			return bb_show_usage();
 	}
 #endif
 }
@@ -748,7 +748,7 @@ static void install_links(const char *busybox UNUSED_PARAM,
 # endif
 
 # if ENABLE_BUSYBOX
-static void run_applet_and_exit(const char *name, char **argv) NORETURN;
+static int run_applet_and_exit(const char *name, char **argv) /*NORETURN*/;
 
 /* If we were called as "busybox..." */
 static int busybox_main(char **argv)
@@ -872,12 +872,12 @@ static int busybox_main(char **argv)
 	/* We support "busybox /a/path/to/applet args..." too. Allows for
 	 * "#!/bin/busybox"-style wrappers */
 	applet_name = bb_get_last_path_component_nostrip(argv[0]);
-	run_applet_and_exit(applet_name, argv);
+	return run_applet_and_exit(applet_name, argv);
 }
 # endif
 
 # if NUM_APPLETS > 0
-void FAST_FUNC run_applet_no_and_exit(int applet_no, const char *name, char **argv)
+int FAST_FUNC run_applet_no_and_exit(int applet_no, const char *name, char **argv)
 {
 	int argc = string_array_len(argv);
 
@@ -908,30 +908,30 @@ void FAST_FUNC run_applet_no_and_exit(int applet_no, const char *name, char **ar
 		if (argc == 2 && strcmp(argv[1], "--help") == 0) {
 			/* Make "foo --help" exit with 0: */
 			xfunc_error_retval = 0;
-			bb_show_usage();
+			return bb_show_usage();
 		}
 	}
 	if (ENABLE_FEATURE_SUID)
 		check_suid(applet_no);
 	xfunc_error_retval = applet_main[applet_no](argc, argv);
 	/* Note: applet_main() may also not return (die on a xfunc or such) */
-	xfunc_die();
+	return xfunc_die();
 }
 # endif /* NUM_APPLETS > 0 */
 
 # if ENABLE_BUSYBOX || NUM_APPLETS > 0
-static NORETURN void run_applet_and_exit(const char *name, char **argv)
+static /*NORETURN*/ int run_applet_and_exit(const char *name, char **argv)
 {
 #  if ENABLE_BUSYBOX
 	if (is_prefixed_with(name, "busybox"))
-		exit(busybox_main(argv));
+		return busybox_main(argv);
 #  endif
 #  if NUM_APPLETS > 0
 	/* find_applet_by_name() search is more expensive, so goes second */
 	{
 		int applet = find_applet_by_name(name);
 		if (applet >= 0)
-			run_applet_no_and_exit(applet, name, argv);
+			return run_applet_no_and_exit(applet, name, argv);
 	}
 #  endif
 
@@ -939,7 +939,7 @@ static NORETURN void run_applet_and_exit(const char *name, char **argv)
 	full_write2_str(applet_name);
 	full_write2_str(": applet not found\n");
 	/* POSIX: "If a command is not found, the exit status shall be 127" */
-	exit(127);
+	return 127;
 }
 # endif
 
@@ -1029,7 +1029,7 @@ int main(int argc UNUSED_PARAM, char **argv)
 		applet_name++;
 	applet_name = bb_basename(applet_name);
 	parse_config_file(); /* ...maybe, if FEATURE_SUID_CONFIG */
-	run_applet_and_exit(applet_name, argv);
+	return run_applet_and_exit(applet_name, argv);
 
 #endif
 }

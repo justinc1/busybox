@@ -169,7 +169,7 @@ void FAST_FUNC bb_error_msg_and_die(const char *s, ...)
 	va_start(p, s);
 	bb_verror_msg(s, p, NULL);
 	va_end(p);
-	xfunc_die();
+	exit(xfunc_die());
 }
 
 void FAST_FUNC bb_error_msg(const char *s, ...)
