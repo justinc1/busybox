@@ -418,7 +418,10 @@ extern struct globals_misc *const ash_ptr_to_globals_misc;
 #if DEBUG
 static void trace_printf(const char *fmt, ...);
 static void trace_vprintf(const char *fmt, va_list va);
-# define TRACE(param)    trace_printf param
+static int ss_line;
+static const char* ss_file;
+static const char* ss_func;
+# define TRACE(param)    { ss_line=__LINE__; ss_file=__FILE__; ss_func=__FUNCTION__; trace_printf param ; }
 # define TRACEV(param)   trace_vprintf param
 # define close(fd) do { \
 	int dfd = (fd); \
@@ -874,6 +877,7 @@ trace_printf(const char *fmt, ...)
 		fprintf(tracefile, "[%u] ", (int) getpid());
 	if (DEBUG_SIG)
 		fprintf(tracefile, "pending s:%d i:%d(supp:%d) ", pending_sig, pending_int, suppress_int);
+	fprintf(tracefile, "%s:%d=%s: ", ss_file, ss_line, ss_func);
 	va_start(va, fmt);
 	vfprintf(tracefile, fmt, va);
 	va_end(va);
@@ -12381,8 +12385,9 @@ readtoken(void)
  out:
 	checkkwd = 0;
 #if DEBUG
-	if (!alreadyseen)
+	if (!alreadyseen) {
 		TRACE(("token '%s' %s\n", tokname_array[t], t == TWORD ? wordtext : ""));
+	}
 	else
 		TRACE(("reread token '%s' %s\n", tokname_array[t], t == TWORD ? wordtext : ""));
 #endif
