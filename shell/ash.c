@@ -460,7 +460,7 @@ var_end(const char *var)
 
 /* ============ Interrupts / exceptions */
 
-static void exitshell(void) NORETURN;
+static void exitshell(void) /*NORETURN*/;
 
 /*
  * These macros allow the user to suspend the handling of interrupt signals
@@ -4944,7 +4944,9 @@ forkchild(struct job *jp, union node *n, int mode)
 		ignoresig(SIGINT);
 		ignoresig(SIGQUIT);
 		if (jp->nprocs == 0) {
+#if OSV_BUILD == 0
 			close(0);
+#endif
 			if (open(bb_dev_null, O_RDONLY) != 0)
 				ash_msg_and_raise_error("can't open '%s'", bb_dev_null);
 		}
@@ -5030,7 +5032,11 @@ forkshell(struct job *jp, union node *n, int mode)
 	int pid;
 
 	TRACE(("forkshell(%%%d, %p, %d) called\n", jobno(jp), n, mode));
+#if OSV_BUILD == 0
 	pid = fork();
+#else
+	pid = 0;
+#endif
 	if (pid < 0) {
 		TRACE(("Fork failed, errno=%d", errno));
 		if (jp)
@@ -5041,6 +5047,10 @@ forkshell(struct job *jp, union node *n, int mode)
 		CLEAR_RANDOM_T(&random_gen); /* or else $RANDOM repeats in child */
 		forkchild(jp, n, mode);
 	} else {
+		// TODO: In OSv, forkparent will not be called.
+		// Because of that, jobs might not will work as expected.
+		// Apps are just started in background, and they finish at some time.
+		// Shell might not be able to wait on them to finish.
 		forkparent(jp, n, mode, pid);
 	}
 	return pid;
@@ -7713,7 +7723,21 @@ tryexec(IF_FEATURE_SH_STANDALONE(int applet_no,) char *cmd, char **argv, char **
 		execve(cmd, argv, envp);
 	} while (errno == EINTR);
 #else
+	// printf("DBG %s:%d-%s: cmd=%s, argv[0]=%s.\n", __FILE__, __LINE__, __FUNCTION__, cmd, argv[0]);
+#if OSV_BUILD == 0
 	execve(cmd, argv, envp);
+#else
+	{
+		int ret = 0;
+		pid_t ch_pid = -1;
+		ret = osv_execve(cmd, argv, envp, (long*)&ch_pid, -1);
+		//errno = 0; // osv_execve should clear errno on success
+		if(ret)
+			errno = ENOSYS;
+		osv_waittid(ch_pid, NULL, 0);
+		return;
+	}
+#endif
 #endif
 	if (cmd != (char*) bb_busybox_exec_path && errno == ENOEXEC) {
 		/* Run "cmd" as a shell script:
@@ -7748,7 +7772,7 @@ tryexec(IF_FEATURE_SH_STANDALONE(int applet_no,) char *cmd, char **argv, char **
  * have to change the find_command routine as well.
  * argv[-1] must exist and be writable! See tryexec() for why.
  */
-static void shellexec(char *prog, char **argv, const char *path, int idx) NORETURN;
+static void shellexec(char *prog, char **argv, const char *path, int idx) /*NORETURN*/;
 static void shellexec(char *prog, char **argv, const char *path, int idx)
 {
 	char *cmdname;
@@ -7764,6 +7788,7 @@ static void shellexec(char *prog, char **argv, const char *path, int idx)
 #endif
 	) {
 		tryexec(IF_FEATURE_SH_STANDALONE(applet_no,) prog, argv, envp);
+		// printf("DBG %s:%d-%s after tryexec(%s, argv[0]=%s, ...), errno=%p %d, idx=%d\n", __FILE__,__LINE__,__FUNCTION__, prog, argv[0], &errno, errno, idx); fflush(stdout);
 		if (applet_no >= 0) {
 			/* We tried execing ourself, but it didn't work.
 			 * Maybe /proc/self/exe doesn't exist?
@@ -7784,6 +7809,12 @@ static void shellexec(char *prog, char **argv, const char *path, int idx)
 			stunalloc(cmdname);
 		}
 	}
+
+#if OSV_BUILD
+	// OSv, tryexec succedded, don't continue with error path
+	if(e == 0)
+		return;
+#endif
 
 	/* Map to POSIX errors */
 	switch (e) {
@@ -9778,6 +9809,12 @@ evalcommand(union node *cmd, int flags)
 		listsetvar(varlist.list, VEXPORT|VSTACK);
 		shellexec(argv[0], argv, path, cmdentry.u.index);
 		/* NOTREACHED */
+#if OSV_BUILD
+		// printf("DBG %s:%d-%s shellexec returned\n", __FILE__,__LINE__,__FUNCTION__);
+		status = 0;
+		exitstatus = 0;
+		break;
+#endif
 	} /* default */
 	case CMDBUILTIN:
 		cmdenviron = varlist.list;
@@ -10357,7 +10394,9 @@ closescript(void)
 	popallfiles();
 	if (g_parsefile->pf_fd > 0) {
 		close(g_parsefile->pf_fd);
-		g_parsefile->pf_fd = 0;
+		// set it to -1, to prevent reading from fd=0 in preadfd and nonblock_immune_read.
+		// On OSv, stdin is always available.
+		g_parsefile->pf_fd = -1;
 	}
 }
 
@@ -12587,6 +12626,7 @@ cmdloop(int top)
 			inter++;
 			chkmail();
 		}
+		// printf("DBG %s:%d-%s inter=%d\n", __FILE__,__LINE__,__FUNCTION__, inter);
 		n = parsecmd(inter);
 #if DEBUG
 		if (DEBUG > 2 && debug && (n != NODE_EOF))
@@ -13382,7 +13422,9 @@ exitshell(void)
 	 */
 	setjobctl(0);
 	flush_stdout_stderr();
+#if OSV_BUILD==0
 	_exit(status);
+#endif
 	/* NOTREACHED */
 }
 
@@ -13592,6 +13634,7 @@ int ash_main(int argc UNUSED_PARAM, char **argv)
 		s = state;
 		if (e == EXEXIT || s == 0 || iflag == 0 || shlvl) {
 			exitshell();
+			return 0; // for OSv only
 		}
 		if (e == EXINT) {
 			newline_and_flush(stderr);
@@ -13694,6 +13737,7 @@ int ash_main(int argc UNUSED_PARAM, char **argv)
 #endif
 	TRACE(("End of main reached\n"));
 	exitshell();
+	return 0; // // for OSv only. Or return errno ?
 	/* NOTREACHED */
 }
 

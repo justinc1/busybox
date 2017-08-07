@@ -25,17 +25,28 @@ pid_t FAST_FUNC spawn(char **argv)
 	/* Compiler should not optimize stores here */
 	volatile int failed;
 	pid_t pid;
+#if OSV_BUILD
+	pid_t pid2 = -1;
+#endif
 
 	fflush_all();
 
 	/* Be nice to nommu machines. */
 	failed = 0;
+#if OSV_BUILD == 0
 	pid = vfork();
+#else
+	pid = 0;
+#endif
 	if (pid < 0) /* error */
 		return pid;
 	if (!pid) { /* child */
 		/* This macro is ok - it doesn't do NOEXEC/NOFORK tricks */
+#if OSV_BUILD == 0
 		BB_EXECVP(argv[0], argv);
+#else
+		osv_execve(argv[0], argv, NULL, (long*)&pid2, -1);
+#endif
 
 		/* We are (maybe) sharing a stack with blocked parent,
 		 * let parent know we failed and then exit to unblock parent
@@ -44,7 +55,9 @@ pid_t FAST_FUNC spawn(char **argv)
 		failed = errno;
 		/* mount, for example, does not want the message */
 		/*bb_perror_msg("can't execute '%s'", argv[0]);*/
+#if OSV_BUILD == 0
 		_exit(111);
+#endif
 	}
 	/* parent */
 	/* Unfortunately, this is not reliable: according to standards
@@ -57,7 +70,11 @@ pid_t FAST_FUNC spawn(char **argv)
 		errno = failed;
 		return -1;
 	}
+#if OSV_BUILD == 0
 	return pid;
+#else
+	return pid2;
+#endif
 }
 
 /* Die with an error message if we can't spawn a child process. */
@@ -159,6 +176,7 @@ int FAST_FUNC spawn_and_wait(char **argv)
 	int rc;
 #if ENABLE_FEATURE_PREFER_APPLETS && (NUM_APPLETS > 1)
 	int a = find_applet_by_name(argv[0]);
+	// printf("DBG %s:%d-%s: a=%d, argv[0]=%s.\n", __FILE__, __LINE__, __FUNCTION__, a, argv[0]);
 
 	if (a >= 0) {
 		if (APPLET_IS_NOFORK(a))
