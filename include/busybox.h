@@ -5,6 +5,13 @@
 #ifndef BUSYBOX_H
 #define BUSYBOX_H 1
 
+/* ============ OSv helpers */
+#define OSV_BUILD 1
+extern int osv_execve(const char *path, char *const argv[], char *const envp[],
+    long *thread_id, int notification_fd) __attribute__((weak));
+extern long osv_waittid(long tid, int *status, int options) __attribute__((weak));
+#include <assert.h>
+
 #include "libbb.h"
 /* BB_DIR_foo and BB_SUID_bar constants: */
 #include "applet_metadata.h"
