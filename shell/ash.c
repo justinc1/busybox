@@ -7731,10 +7731,10 @@ tryexec(IF_FEATURE_SH_STANDALONE(int applet_no,) char *cmd, char **argv, char **
 		int ret = 0;
 		pid_t ch_pid = -1;
 		ret = osv_execve(cmd, argv, envp, (long*)&ch_pid, -1);
-		//errno = 0; // osv_execve should clear errno on success
-		if(ret)
-			errno = ENOSYS;
-		osv_waittid(ch_pid, NULL, 0);
+		// osv_execve now clears errno on success, as expected by caller.
+		if(ret == 0) {
+			osv_waittid(ch_pid, NULL, 0);
+		}
 		return;
 	}
 #endif
